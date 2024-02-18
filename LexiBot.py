@@ -49,7 +49,7 @@ Sanan pituus vähintään 5 kirjainta.
 
 
 async def handle_reactions(message):
-    global selected_reaction
+    global selected_reaction, last_user_message
     emoji_list = ['\U0001F95B', '\U00002615', '\U0001F378', '\U0001F37B']
     for emoji in emoji_list:
         await message.add_reaction(emoji)
@@ -61,14 +61,20 @@ async def handle_reactions(message):
     selected_reaction = reaction.emoji
     if reaction.emoji == '\U0001F95B':
         await reaction.message.channel.send(f":milk: Okay, I'll go easy on you. First word is: **Maito**")
+        last_user_message = "maito"
+        used_words["maito"] = True
     elif reaction.emoji == '\U00002615':
         await reaction.message.channel.send(f':coffee: Too tired for hard one? First word is: **Kahvi**')
+        last_user_message = "kahvi"
+        used_words["kahvi"] = True
     elif reaction.emoji == '\U0001F378':
-        await reaction.message.channel.send(f'_Tätä pelimuotoa ei vielä ole olemassa!_')
-        # :cocktail: Something tougher? As you wish! First word is: **Mojito**
+        await reaction.message.channel.send(f':cocktail: Something tougher? As you wish! First word is: **Mojito**')
+        last_user_message = "mojito"
+        used_words["mojito"] = True
     elif reaction.emoji == '\U0001F37B':
-        await reaction.message.channel.send(f'_Tätä pelimuotoa ei vielä ole olemassa!_')
-        # :beers: You are not immortal you know? First word is: **Karhu**
+        await reaction.message.channel.send(f':beers: You are not immortal you know? First word is: **Olut**')
+        last_user_message = "olut"
+        used_words["olut"] = True
 
 
 async def handle_rule_violation(channel):
@@ -134,18 +140,44 @@ async def on_message(message):
     if message.author == bot.user:
         return
     if not message.author.bot:
+        lower_message_content = message.content.lower()
         if last_user_id == message.author.id:
             await message.channel.send(f"Voit lähettää vain yhden viestin kerrallaan!")
             await handle_rule_violation(message.channel)
             return
-        if message.content in used_words:
+        if lower_message_content in used_words:
             await message.channel.send(f"Sana **'{message.content}'** on jo käytetty!")
             await handle_rule_violation(message.channel)
             return
+        if selected_reaction == '\U0001F95B':  # Milk mode
+            if last_user_message is not None and lower_message_content[0] != last_user_message.content[-1].lower():
+                await handle_rule_violation(message.channel)
+                return
+        elif selected_reaction == '\U00002615':  # Coffee mode
+            if (last_user_message is not None and len(lower_message_content) >= 4
+                    and lower_message_content[:2] != last_user_message.content[-2:].lower()):
+                await handle_rule_violation(message.channel)
+                return
+        elif selected_reaction == '\U0001F378':  # Mojito mode
+            if (last_user_message is not None and len(lower_message_content) >= 4
+                    and lower_message_content[0] != last_user_message.content[-1].lower()):
+                common_letters = set(lower_message_content[:-1]).intersection(
+                    set(last_user_message.content[:-1].lower()))
+                if len(common_letters) < 2:
+                    await handle_rule_violation(message.channel)
+                    return
+        elif selected_reaction == '\U0001F37B':  # Booze mode
+            if (last_user_message is not None and len(lower_message_content) >= 5
+                    and lower_message_content[:2] != last_user_message.content[-2:].lower()):
+                common_letters = set(lower_message_content[:-2]).intersection(
+                    set(last_user_message.content[:-2].lower()))
+                if len(common_letters) < 2:
+                    await handle_rule_violation(message.channel)
+                    return
         last_user_message = message
         last_user_id = message.author.id
-        used_words[message.content] = True
-    if len(message.content.split()) > 1:
+        used_words[lower_message_content] = True
+    if len(lower_message_content.split()) > 1:
         await message.channel.send(f"Viestisi voi sisältää vain yhden sanan!")
         await handle_rule_violation(message.channel)
         return

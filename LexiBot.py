@@ -47,16 +47,23 @@ on_ready_message = """
 
 :beers:  **Booze mode:**
 - Seuraavan sanan tulee alkaa edellisen sanan kahdella viimeisellä kirjaimella.
+- Jos uusi sana alkaa vokaalilla, sanan täytyy loppua konsonanttiin ja päinvastoin.
+- Sanassa ei saa olla samaa kirjainta peräkkäin.
+- Sanan pituus on oltava vähintään 5 kirjainta.
+
+:champagne:  **Cham*__pain__* mode:**
+- Seuraavan sanan tulee alkaa edellisen sanan kahdella viimeisellä kirjaimella.
 - Joka toisen sanan merkkimäärä tulee olla on parillinen ja joka toisen pariton.
 - Sanassa ei saa olla samaa kirjainta peräkkäin.
 - Sanan pituus on oltava vähintään 5 kirjainta.
+- Jos uusi sana alkaa vokaalilla, sanan täytyy loppua konsonanttiin ja päinvastoin.
 -------------------------------------------------------------------------------
 """
 
 
 async def handle_reactions(message):
     global selected_reaction, last_user_message
-    emoji_list = ['\U0001F95B', '\U00002615', '\U0001F378', '\U0001F37B']
+    emoji_list = ['\U0001F95B', '\U00002615', '\U0001F378', '\U0001F37B', '\U0001F37E']
     for emoji in emoji_list:
         await message.add_reaction(emoji)
 
@@ -66,13 +73,15 @@ async def handle_reactions(message):
     reaction, user = await bot.wait_for('reaction_add', check=check)
     selected_reaction = reaction.emoji
     if reaction.emoji == '\U0001F95B':
-        await reaction.message.channel.send(f":milk: Okay, I'll go easy on you.")
+        await reaction.message.channel.send(f":milk:Selvä! Mennään helpolla.")
     elif reaction.emoji == '\U00002615':
-        await reaction.message.channel.send(f':coffee: Too tired for hard one?')
+        await reaction.message.channel.send(f':coffee: Liian väsynyt vaikeampaan?')
     elif reaction.emoji == '\U0001F378':
-        await reaction.message.channel.send(f':cocktail: Something tougher? As you wish!')
+        await reaction.message.channel.send(f':cocktail:Jotain tujumpaa? Täältä pesee!')
     elif reaction.emoji == '\U0001F37B':
-        await reaction.message.channel.send(f':beers: You are not immortal you know?')
+        await reaction.message.channel.send(f':beers: Tästä tuleekin mielenkiintoista!')
+    elif reaction.emoji == '\U0001F37E':
+        await reaction.message.channel.send(f':champagne: Älä juhli liian aikaisin! Tästä tulee vaikeaa...')
 
 
 async def handle_rule_violation(channel):
@@ -139,7 +148,8 @@ async def mojito_mode(message, lower_message_content):
             await handle_rule_violation(message.channel)
             return False
         if len(lower_message_content) % 2 != parity:
-            await message.channel.send(f"Joka toisen sanan merkkimäärä tulee olla on parillinen ja joka toisen pariton.")
+            await message.channel.send(
+                f"Joka toisen sanan merkkimäärä tulee olla on parillinen ja joka toisen pariton.")
             await handle_rule_violation(message.channel)
             return False
     last_user_message = message
@@ -151,6 +161,45 @@ async def mojito_mode(message, lower_message_content):
 
 async def booze_mode(message, lower_message_content):
     global last_user_message, last_user_id, used_words, parity
+    vowels = 'aeiouyäö'
+    if (lower_message_content[0] in vowels) == (lower_message_content[-1] in vowels):
+        await message.channel.send(f"Jos sana alkaa vokaalilla, sen täytyy loppua konsonanttiin ja päinvastoin.")
+        await handle_rule_violation(message.channel)
+        return False
+    if len(lower_message_content) < 5:
+        await message.channel.send(f"Sanan pituus on oltava vähintään 5 kirjainta.")
+        await handle_rule_violation(message.channel)
+        return False
+    if any(lower_message_content[i] == lower_message_content[i + 1] for i in range(len(lower_message_content) - 1)):
+        await message.channel.send(f"Sanassa ei saa olla samaa kirjainta peräkkäin.")
+        await handle_rule_violation(message.channel)
+        return False
+    if last_user_message is None:
+        last_user_message = message
+        last_user_id = message.author.id
+        used_words[lower_message_content] = True
+        parity = 1 - len(lower_message_content) % 2
+        return True
+    else:
+        if lower_message_content[:2] != last_user_message.content[-2:].lower():
+            await message.channel.send(f"Seuraavan sanan tulee alkaa edellisen sanan kahdella viimeisellä kirjaimella.")
+            await handle_rule_violation(message.channel)
+            return False
+    last_user_message = message
+    last_user_id = message.author.id
+    used_words[lower_message_content] = True
+    parity = 1 - parity
+    return True
+
+
+async def champagne_mode(message, lower_message_content):
+    global last_user_message, last_user_id, used_words, parity
+
+    vowels = 'aeiouyäö'
+    if (lower_message_content[0] in vowels) == (lower_message_content[-1] in vowels):
+        await message.channel.send(f"Jos sana alkaa vokaalilla, sen täytyy loppua konsonanttiin ja päinvastoin.")
+        await handle_rule_violation(message.channel)
+        return False
     if len(lower_message_content) < 5:
         await message.channel.send(f"Sanan pituus on oltava vähintään 5 kirjainta.")
         await handle_rule_violation(message.channel)
@@ -186,7 +235,7 @@ async def on_ready():
     global wordchain_channel_id
     print(f"Logged in as {bot.user.name}")
     for guild in bot.guilds:
-        existing_channel = discord.utils.get(guild.text_channels, name="wordchain")
+        existing_channel = discord.utils.get(guild.text_channels, name="sanaketju")
         if existing_channel:
             await existing_channel.delete()
         overwrites = {
@@ -198,11 +247,33 @@ async def on_ready():
                                                   send_messages=True,
                                                   read_messages=True, manage_channels=True)
         }
-        channel = await guild.create_text_channel("wordchain", overwrites=overwrites)
+        channel = await guild.create_text_channel("sanaketju", overwrites=overwrites)
         wordchain_channel_id = channel.id
         message = await channel.send(on_ready_message)
         await message.pin()
         await handle_reactions(message)
+
+
+@bot.event
+async def on_guild_join(guild):
+    global wordchain_channel_id
+    existing_channel = discord.utils.get(guild.text_channels, name="sanaketju")
+    if existing_channel:
+        await existing_channel.delete()
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(manage_channels=False, mention_everyone=False,
+                                                        embed_links=False, attach_files=False,
+                                                        view_channel=True, read_message_history=True,
+                                                        read_messages=True),
+        bot.user: discord.PermissionOverwrite(read_message_history=True, manage_messages=True,
+                                              send_messages=True,
+                                              read_messages=True, manage_channels=True)
+    }
+    channel = await guild.create_text_channel("sanaketju", overwrites=overwrites)
+    wordchain_channel_id = channel.id
+    message = await channel.send(on_ready_message)
+    await message.pin()
+    await handle_reactions(message)
 
 
 @bot.event
@@ -211,7 +282,7 @@ async def on_message_delete(message):
     if message.channel.id != wordchain_channel_id:
         return
     if message == last_user_message:
-        await message.channel.send(f"Sana poistettu tai sitä on muokattu: Jatka Wordchainia sanasta: {message.content}")
+        await message.channel.send(f"Sana poistettu tai sitä on muokattu. Jatka Sanaketjua sanasta: '**{message.content}**'")
         last_user_message = None
 
 
@@ -221,7 +292,7 @@ async def on_message_edit(before, after):
     if before.channel.id != wordchain_channel_id:
         return
     if before == last_user_message:
-        await before.channel.send(f"Sana poistettu tai sitä on muokattu: Jatka Wordchainia sanasta: {before.content}")
+        await before.channel.send(f"Sana poistettu tai sitä on muokattu. Jatka Sanaketjua sanasta: '**{before.content}**'")
         last_user_message = None
 
 
@@ -264,6 +335,9 @@ async def on_message(message):
                 return
         elif selected_reaction == '\U0001F37B':  # Booze mode
             if not await booze_mode(message, lower_message_content):
+                return
+        elif selected_reaction == '\U0001F37E':  # Champagne mode
+            if not await champagne_mode(message, lower_message_content):
                 return
         await message.add_reaction(selected_reaction)
         last_user_message = message

@@ -241,14 +241,15 @@ async def champagne_mode(message, lower_message_content):
     return True
 
 
-@bot.event
-async def on_ready():
+async def create_wordchain_channel(guild, existing_channel=None):
     global wordchain_channel_id
-    print(f"Logged in as {bot.user.name}")
-    for guild in bot.guilds:
-        existing_channel = discord.utils.get(guild.text_channels, name="sanaketju")
-        if existing_channel:
-            await existing_channel.delete()
+    if existing_channel:
+        while True:
+            deleted = await existing_channel.purge(limit=100)
+            if len(deleted) < 100:
+                break
+        await existing_channel.purge()
+    else:
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(manage_channels=False, mention_everyone=False,
                                                             embed_links=False, attach_files=False,
@@ -258,35 +259,35 @@ async def on_ready():
                                                   send_messages=True,
                                                   read_messages=True, manage_channels=True)
         }
-        channel = await guild.create_text_channel("sanaketju", overwrites=overwrites)
-        guild_id = guild.id  # Hae palvelimen ID
-        wordchain_channel_id[guild_id] = channel.id  # Tallenna kanavan ID kyseisen palvelimen alle
-        message = await channel.send(on_ready_message)
-        await message.pin()
-        await handle_reactions(message)
+        existing_channel = await guild.create_text_channel("sanaketju", overwrites=overwrites)
+    guild_id = guild.id  # Hae palvelimen ID
+    wordchain_channel_id[guild_id] = existing_channel.id  # Tallenna kanavan ID kyseisen palvelimen alle
+    message = await existing_channel.send(on_ready_message)
+    await message.pin()
+    await handle_reactions(message)
+
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    for guild in bot.guilds:
+        print(f"Connected to server: {guild.name}, id: {guild.id}")
+        existing_channel = discord.utils.get(guild.text_channels, name="sanaketju")
+        await create_wordchain_channel(guild, existing_channel)
 
 
 @bot.event
 async def on_guild_join(guild):
-    global wordchain_channel_id
     existing_channel = discord.utils.get(guild.text_channels, name="sanaketju")
-    if existing_channel:
-        await existing_channel.delete()
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(manage_channels=False, mention_everyone=False,
-                                                        embed_links=False, attach_files=False,
-                                                        view_channel=True, read_message_history=True,
-                                                        read_messages=True),
-        bot.user: discord.PermissionOverwrite(read_message_history=True, manage_messages=True,
-                                              send_messages=True,
-                                              read_messages=True, manage_channels=True)
-    }
-    channel = await guild.create_text_channel("sanaketju", overwrites=overwrites)
-    guild_id = guild.id  # Hae palvelimen ID
-    wordchain_channel_id[guild_id] = channel.id  # Tallenna kanavan ID kyseisen palvelimen alle
-    message = await channel.send(on_ready_message)
-    await message.pin()
-    await handle_reactions(message)
+    await create_wordchain_channel(guild, existing_channel)
+
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    global wordchain_channel_id
+    guild_id = channel.guild.id  # Hae palvelimen ID
+    if channel.id == wordchain_channel_id[guild_id]:  # Tarkista, onko poistettu kanava "sanaketju"-kanava
+        await create_wordchain_channel(channel.guild)
 
 
 @bot.event
@@ -304,7 +305,7 @@ async def on_message_delete(message):
 @bot.event
 async def on_message_edit(before, after):
     guild_id = before.guild.id  # Hae palvelimen ID
-    if before.content != after.content:
+    if before.content != after.content and before.channel.id == wordchain_channel_id[guild_id]:
         await before.channel.send(
             f"Viestiä muokattu. Alkuperäinen viesti: '**{before.content}**'. Muokattu viesti: '**{after.content}**'")
         if before == last_user_message[guild_id]:  # Tarkista, onko muokattu viesti viimeinen viesti kyseisen

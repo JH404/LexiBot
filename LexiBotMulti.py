@@ -264,7 +264,9 @@ async def create_wordchain_channel(guild, existing_channel=None):
     wordchain_channel_id[guild_id] = existing_channel.id  # Tallenna kanavan ID kyseisen palvelimen alle
     message = await existing_channel.send(on_ready_message)
     await message.pin()
-    await handle_reactions(message)
+
+    # Luo tehtävä handle_reactions-funktiolle, joka suoritetaan taustalla
+    asyncio.create_task(handle_reactions(message))
 
 
 @bot.event

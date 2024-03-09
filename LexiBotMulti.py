@@ -309,7 +309,7 @@ async def on_message_edit(before, after):
     guild_id = before.guild.id  # Hae palvelimen ID
     if before.content != after.content and before.channel.id == wordchain_channel_id[guild_id]:
         await before.channel.send(
-            f"Viestiä muokattu. Alkuperäinen viesti: '**{before.content}**'. Muokattu viesti: '**{after.content}**'")
+            f"Viestiä muokattu. Jatka Sanaketjua sanasta: '**{before.content}**'.")
         if before == last_user_message[guild_id]:  # Tarkista, onko muokattu viesti viimeinen viesti kyseisen
             # palvelimen perusteella
             last_user_message[guild_id] = after  # Päivitä viimeinen viesti kyseisen palvelimen perusteella
